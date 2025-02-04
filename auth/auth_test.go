@@ -90,5 +90,8 @@ func TestLogIn(t *testing.T) {
 		t.Errorf("id is not set: %v", err)
 	}
 
-	removeFile("username")
+	err = removeFile("username")
+	if err != nil {
+		t.Errorf("failed to remove a file: %v", err)
+	}
 }

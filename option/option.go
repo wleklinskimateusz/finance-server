@@ -1,76 +1,84 @@
-package optional
+// option/option.go
+package option
 
-import "errors"
+import "fmt"
 
-type Option[T any] interface {
-	Get() (*T, error)
-	IsPresent() bool
-	IfPresent(consumer func(val T)) Option[T]
-	OrElse(other T) T
-	OrElseGet(otherFunc func() T) T
-	Filter(predicate func(val T) bool) Option[T]
+// Option represents an optional value.
+// If valid is true, then value is present (Some); otherwise, it is None.
+type Option[T any] struct {
+	value T
+	valid bool
 }
 
-type option[T any] struct {
-	val *T // pointer to the type, so that NIL can represented
+// Some creates an Option containing a value.
+func Some[T any](value T) Option[T] {
+	return Option[T]{value: value, valid: true}
 }
 
-func Of[T any](val T) Option[T] {
-	return &option[T]{&val}
+// None creates an Option with no value.
+func None[T any]() Option[T] {
+	var zero T
+	return Option[T]{value: zero, valid: false}
 }
 
-func Empty[T any]() Option[T] {
-	return &option[T]{}
+// IsSome returns true if the Option contains a value.
+func (o Option[T]) IsSome() bool {
+	return o.valid
 }
 
-func (option *option[T]) Get() (*T, error) {
-	if option.IsPresent() {
-		return option.val, nil
+// IsNone returns true if the Option does not contain a value.
+func (o Option[T]) IsNone() bool {
+	return !o.valid
+}
+
+// Unwrap returns the contained value if present; it panics if the Option is None.
+func (o Option[T]) Unwrap() T {
+	if !o.valid {
+		panic("called Unwrap on a None Option")
 	}
-	return nil, errors.New("no value present")
+	return o.value
 }
 
-func (option *option[T]) IsPresent() bool {
-	return option.val != nil
-}
-
-func (option *option[T]) IfPresent(consumer func(val T)) Option[T] {
-	val, _ := option.Get()
-	if val != nil {
-		consumer(*val)
+// UnwrapOr returns the contained value if present; otherwise, it returns defaultValue.
+func (o Option[T]) UnwrapOr(defaultValue T) T {
+	if o.valid {
+		return o.value
 	}
-	return option
+	return defaultValue
 }
 
-func (option *option[T]) OrElse(other T) T {
-	val, _ := option.Get()
-	if val != nil {
-		return *val
+// Option represents an optional value.
+
+// Map applies a function to the Option’s value, if present,
+// returning a new Option holding the result.
+func Map[T, U any](o Option[T], f func(T) U) Option[U] {
+	if o.valid {
+		return Some(f(o.value))
 	}
-	return other
+	return None[U]()
 }
 
-func (option *option[T]) OrElseGet(otherFunc func() T) T {
-	val, _ := option.Get()
-	if val != nil {
-		return *val
+// FlatMap applies a function that returns an Option to the contained value.
+func FlatMap[T, U any](o Option[T], f func(T) Option[U]) Option[U] {
+	if o.valid {
+		return f(o.value)
 	}
-	return otherFunc()
+	return None[U]()
 }
 
-func (option *option[T]) Filter(predicate func(val T) bool) Option[T] {
-	val, _ := option.Get()
-	if val != nil && predicate(*val) {
-		return Of[T](*val)
+// Filter returns the Option itself if the contained value satisfies the predicate,
+// otherwise it returns None.
+func (o Option[T]) Filter(predicate func(T) bool) Option[T] {
+	if o.valid && predicate(o.value) {
+		return o
 	}
-	return Empty[T]()
+	return None[T]()
 }
 
-func Map[T any, S any](option Option[T], mapper func(val T) S) Option[S] {
-	val, _ := option.Get()
-	if val != nil {
-		result := mapper(*val)
-		return Of[S](result)
+// String implements the Stringer interface so that Option values can be printed nicely.
+func (o Option[T]) String() string {
+	if o.valid {
+		return fmt.Sprintf("Some(%v)", o.value)
 	}
-	return Empty[S]()
+	return "None"
 }
