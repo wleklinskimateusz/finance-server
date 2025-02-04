@@ -55,6 +55,9 @@ func (as AuthService) login(username string, password string) (option.Option[str
 	if !result {
 		return handleError[string](fmt.Errorf("password does not match"), "")
 	}
+	if user.id.IsNone() {
+		return handleError[string](fmt.Errorf("id is not set"), "")
+	}
 	return user.id, nil
 
 }

@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/yourusername/wleklinskimateusz/option"
 )
 
@@ -29,26 +31,36 @@ func (MockUserRepository) FindByUsername(username string) (option.Option[UserDB]
 	if err != nil {
 		return handleError[UserDB](err, "failed to read from file")
 	}
-	hashedPassword := string(buffor)
+	userDetails := strings.Split(string(buffor), ",")
+	uuid := userDetails[0]
+	hashedPassword := userDetails[1]
 
-	return option.Some(UserDB{username: username, hashedPassword: hashedPassword}), nil
+	return option.Some(UserDB{username: username, hashedPassword: hashedPassword, id: option.Some(uuid)}), nil
 }
 
 func (m MockUserRepository) Save(user UserDB) error {
-	err := os.Mkdir("/tmp/users", 0666)
+	err := os.MkdirAll("/tmp/users", 0777)
 	if err != nil {
-		fmt.Println("Error while creating users temp dir")
+		return fmt.Errorf("failed creating /tmp/users: %v", err)
 	}
 	fname := filepath.Join("/tmp/users", user.username)
-	err = os.WriteFile(fname, []byte(user.hashedPassword), 0666)
+	f, err := os.Create(fname)
 	if err != nil {
-		fmt.Println("Error writing file")
+		return fmt.Errorf("failed opening the file: %v", err)
+	}
+	defer f.Close()
+
+	uuid := uuid.NewString()
+
+	_, err = f.Write([]byte(uuid + "," + user.hashedPassword))
+	if err != nil {
+		return fmt.Errorf("failed writing to file /tmp/users/{username}: %v", err)
 	}
 	return nil
 }
 
 func removeFile(username string) error {
-	err := os.Remove("/tmp/users/" + username)
+	err := os.RemoveAll("/tmp/users/" + username)
 	return err
 }
 
@@ -70,4 +82,13 @@ func TestLogIn(t *testing.T) {
 	as := AuthService{userRepository: userRepository}
 	as.signup("username", "password")
 
+	id, err := as.login("username", "password")
+	if err != nil {
+		t.Errorf("error while logging in: %v", err)
+	}
+	if id.IsNone() {
+		t.Errorf("id is not set: %v", err)
+	}
+
+	removeFile("username")
 }
